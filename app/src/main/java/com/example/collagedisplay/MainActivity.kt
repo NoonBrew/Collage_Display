@@ -24,14 +24,22 @@ private const val TAG = "MAIN_ACTIVITY"
 
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var mainImageButton: ImageButton
+//    private lateinit var mainImageButton: ImageButton
+    private lateinit var imageButtons: List<ImageButton>
+
     private lateinit var mainView: View
 
-    private var newImagePath: String? = null
-    private var visibleImagePath: String? = null
+//    private var newImagePath: String? = null
+//    private var visibleImagePath: String? = null
+    private var imagePaths: ArrayList<String?> = arrayListOf(null, null, null, null)
 
-    private val NEW_IMAGE_PATH_KEY = "new image path key"
-    private val VISIBLE_IMAGE_PATH_KEY = "visible image path key"
+    private var imageIndexHolder: Int? = null // Index of what image button they are using.
+
+    private var currentImagePath: String? = null // Current image path the user is working with.
+
+    private val IMAGE_PATH_LIST_ARRAY_KEY = "image path list key"
+    private val IMAGE_INDEX_KEY = "image index key"
+    private val CURRENT_IMAGE_PATH_KEY = "current image path key"
 
     private val cameraActivityLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()){
         result -> handleImage(result)
@@ -44,29 +52,52 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        newImagePath = savedInstanceState?.getString(NEW_IMAGE_PATH_KEY)
-        visibleImagePath = savedInstanceState?.getString(VISIBLE_IMAGE_PATH_KEY)
+        imageIndexHolder = savedInstanceState?.getInt(IMAGE_INDEX_KEY)
+        currentImagePath = savedInstanceState?.getString(CURRENT_IMAGE_PATH_KEY)
+        imagePaths = savedInstanceState?.getStringArrayList(IMAGE_PATH_LIST_ARRAY_KEY)
+            ?: arrayListOf(null, null, null, null)
 
-        mainImageButton = findViewById(R.id.main_image_button)
+        mainView = findViewById(R.id.content_layout)
 
-        mainImageButton.setOnClickListener{
-            takePicture()
+        imageButtons = listOf<ImageButton>(
+            findViewById(R.id.main_image_button),
+            findViewById(R.id.main_image_button2),
+            findViewById(R.id.main_image_button3),
+            findViewById(R.id.main_image_button4)
+        )
+
+//        mainImageButton = findViewById(R.id.main_image_button)
+//
+//        mainImageButton.setOnClickListener{
+//            takePicture()
+//        }
+
+        for (imageButton in imageButtons) {
+            imageButton.setOnClickListener { ib ->
+                takePictureFor(ib as ImageButton) // as tells the function that we are passing an ImageButton
+            }
         }
     }
 
     // Sends the the image paths as an outState bundle to be read on View being recreated.
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
-        outState.putString(NEW_IMAGE_PATH_KEY, newImagePath)
-        outState.putString(VISIBLE_IMAGE_PATH_KEY, visibleImagePath)
+        outState.putStringArrayList(IMAGE_PATH_LIST_ARRAY_KEY, imagePaths)
+        outState.putString(CURRENT_IMAGE_PATH_KEY, currentImagePath)
+        imageIndexHolder?.let { index -> outState.putInt(IMAGE_INDEX_KEY, index) }
+
     }
 
-    private fun takePicture() {
+    private fun takePictureFor(imageButton: ImageButton) {
+
+        val index = imageButtons.indexOf(imageButton) // gets the reference to the button
+        imageIndexHolder = index // and passes that to our imageIndexHolder
+
         val takePictureIntent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
         val (imageFile, imageFilePath) = createImageFile()
         if (imageFile != null) {
             // This is a refrence to the image file.
-            newImagePath = imageFilePath
+            currentImagePath = imageFilePath
             val imageUri = FileProvider.getUriForFile(this,
                 "com.example.collagedisplay.fileprovider",
                 imageFile) // Creates a URI for the new image file that was created.
@@ -97,9 +128,10 @@ class MainActivity : AppCompatActivity() {
     private fun handleImage(result: ActivityResult) {
         when (result.resultCode) {
             RESULT_OK -> {
-                Log.d(TAG, "Result ok, user took a picture, image at $newImagePath")
-                visibleImagePath = newImagePath // Runs once UI is set up and checks ImagePath if it has an image
-
+                Log.d(TAG, "Result ok, user took a picture, image at $currentImagePath")
+//                visibleImagePath = newImagePath  //Runs once UI is set up and checks ImagePath if it has an image
+                // Stores the current image path with the index of the button pressed
+                imageIndexHolder?.let { index -> imagePaths[index] = currentImagePath }
             }
             RESULT_CANCELED -> {
                 Log.d(TAG, "Result cancelled, no picture taken")
@@ -112,14 +144,20 @@ class MainActivity : AppCompatActivity() {
     // another activity.
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        Log.d(TAG, "on window focus changed $hasFocus visible image at $visibleImagePath")
+        Log.d(TAG, "on window focus changed $hasFocus visible image at $currentImagePath")
         if (hasFocus) {
-            visibleImagePath?.let { imagePath ->
-                loadImage(mainImageButton, imagePath)
+//            visibleImagePath?.let { imagePath ->
+//                loadImage(mainImageButton, imagePath)
+//            }
+            imageButtons.zip(imagePaths) { imageButton, imagePath ->
+                imagePath?.let {
+                    loadImage(imageButton, imagePath)
+                }
             }
         }
     }
 
+    // loads an image path into an image button.
     private fun loadImage(imageButton: ImageButton, imagePath: String) {
         Picasso.get()
             .load(File(imagePath))
